@@ -56,7 +56,7 @@ class Config(object):
             'id': 'heartbeat',
             'func': heartbeat,
             'trigger': 'interval',
-            'seconds': 10
+            'seconds': 120
         },
         {
             'id': 'vulnsupdate',

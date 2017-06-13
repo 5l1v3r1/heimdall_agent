@@ -1,7 +1,6 @@
 import requests
 import subprocess
 import ConfigParser
-from pprint import pprint
 
 class actions(object):
 
@@ -27,21 +26,46 @@ class actions(object):
         r = requests.post(url,data=data)
         return r.json()
 
+    def getCVE(self,bid):
+        data = {"id":bid}
+        url = "http://vulners.com/api/v3/search/id/"
+        r = requests.post(url,json=data)
+        return r.json()["data"]["documents"][bid]["cvelist"]
+
+    def getXPL(self,cveid):
+        description,xpl_url= list(),list()
+        url = "http://vulners.com/api/v3/search/lucene/"
+        query = "cvelist:%s type:exploitdb" % cveid
+        data = {"query":query}
+        r = requests.post(url,json=data)
+        response = r.json()["data"]["search"]
+        if response:
+            for xpl in response:
+                description.append(xpl["_source"]["description"])
+                xpl_url.append(xpl["_source"]["href"])
+        return description,xpl_url
+
     def sendVulns(self,packages):
         self.getConf()
+        data = {"key":self.conf['api'],"packages":dict()}
+        for package in packages:
+            data['packages'][package] = dict()
+            for bid in packages[package]:
+                cves = self.getCVE(bid)
+                for cve in cves:
+                    description,xpl = self.getXPL(cve)
+                    data['packages'][package][cve] = description,xpl
         url = 'http://%s/api/v1/vulnerabilities' % self.conf['server']
-        data = {'key': self.conf['api'],'packages':packages}
-        r = requests.post(url,data=data)
+        r = requests.post(url,json=data)
         return r.json()
 
     def VulnsUpdate(self,):
         self.getConf()
-
         packages = subprocess.Popen(self.getPackagesCmd[self.conf['distro']], stdout=subprocess.PIPE, shell=True).communicate()[0].split('\n')
         packages = [package for package in packages if package]
         environment = {'package':packages,'os':self.conf['distro'],'version':self.conf['distro_version']}
         response = self.getVulns(environment)
-        packages = response['data']['packages'].keys()
+        packages = response['data']['packages']
         return self.sendVulns(packages)
 
     def getVulns(self,environment):
